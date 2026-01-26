@@ -8,14 +8,13 @@ from aiomcrcon import Client as RconClient
 from aiomcrcon.errors import RCONConnectionError, ClientNotConnectedError
 from napcat import NapCatClient, GroupMessageEvent
 
-# 确保引入正确的类型定义
-from napcat.types.messages import (
+from napcat.types import (
     MessageText, 
     MessageAt, 
     MessageImage, 
     MessageFace, 
     MessageReply,
-    Model as MessageSegmentType  # 使用 Model 作为所有消息段的联合类型
+    MessageSegmentType
 )
 
 def load_config() -> dict[str, Any]:
