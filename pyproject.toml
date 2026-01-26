@@ -1,0 +1,18 @@
+[project]
+name = "qq2mc"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14.2"
+dependencies = [
+    "aio-mc-rcon>=3.4.2",
+    "napcat-sdk>=0.3.4",
+]
+
+
+[tool.bot]
+mc_server_host = "mc-server"
+mc_server_port = 25575
+mc_server_password = "QeGkUJUWsChKWRaDj6Fd"
+napcat_url = "ws://localhost:3001"
+target_group_id = 948251336
