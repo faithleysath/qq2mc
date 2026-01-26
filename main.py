@@ -5,15 +5,17 @@ from pathlib import Path
 from typing import Any
 
 from aiomcrcon import Client as RconClient
+from aiomcrcon.errors import RCONConnectionError, ClientNotConnectedError
 from napcat import NapCatClient, GroupMessageEvent
 
-from napcat.types import (
+# 确保引入正确的类型定义
+from napcat.types.messages import (
     MessageText, 
     MessageAt, 
     MessageImage, 
     MessageFace, 
     MessageReply,
-    MessageSegmentType
+    Model as MessageSegmentType  # 使用 Model 作为所有消息段的联合类型
 )
 
 def load_config() -> dict[str, Any]:
@@ -26,100 +28,90 @@ def load_config() -> dict[str, Any]:
     return data.get("tool", {}).get("bot", {})
 
 def parse_message_chain(message_chain: tuple[MessageSegmentType, ...]) -> str:
-    """
-    将复杂的 QQ 消息链转换为适合 MC 显示的纯文本
-    """
     text_buffer: list[str] = []
     
     for seg in message_chain:
         match seg:
             case MessageText(data=d):
                 text_buffer.append(d.text)
-            
             case MessageImage():
                 text_buffer.append("[图片]")
-            
             case MessageAt(data=d):
                 name = d.name if d.name is not None else d.qq
                 text_buffer.append(f"@{name} ")
-                
             case MessageFace():
                 text_buffer.append("[表情]")
-            
             case MessageReply():
-                text_buffer.append("[回复] ")
-                
+                pass # 忽略回复引用
             case _:
                 pass
 
     return "".join(text_buffer)
 
-async def query_online_players(rcon: RconClient, event: GroupMessageEvent) -> None:
+# --- 核心优化：通用 RCON 执行器 (带重试) ---
+async def execute_rcon_command(rcon: RconClient, command: str, max_retries: int = 1) -> str | None:
     """
-    发送 list 命令并回显给群聊
+    执行 RCON 命令，包含自动重连和重试逻辑。
+    返回: 命令响应文本(str)，如果最终失败则返回 None。
     """
-    try:
-        # RCON 的 send_cmd 返回 str，这里显式标注
-        response, _ = await rcon.send_cmd("list")
-        
-        # 简单的格式美化
-        if not response:
-            msg = "服务器未响应 list 指令。"
-        else:
-            # 这里的 response 通常格式为: "There are 2 of a max of 20 players online: Alex, Steve"
-            # 我们可以加个中文标题
-            msg = f"【当前在线】\n{response.strip()}"
-            
-        # 使用 event.reply 回复，它在 SDK 中定义为 async
-        await event.reply(msg)
-        
-    except Exception as e:
-        await event.reply(f"查询失败: {e}")
-
-async def reconnect_rcon(rcon: RconClient, max_attempts: int = 3) -> bool:
-    """
-    RCON 重连逻辑，返回是否成功
-    """
-    for attempt in range(1, max_attempts + 1):
+    for attempt in range(max_retries + 1):
         try:
-            await rcon.connect()
-            print(f"RCON 重连成功 (尝试 {attempt}/{max_attempts})")
-            return True
+            # 尝试发送
+            res, _ = await rcon.send_cmd(command)
+            return res
+
+        except (ClientNotConnectedError, RCONConnectionError, OSError) as e:
+            # 连接错误，尝试重连
+            print(f"RCON 执行异常: {e}，正在尝试重连...")
+            
+            # 如果是最后一次尝试，就不再重连了，直接抛出或返回
+            if attempt == max_retries:
+                print(f"RCON 命令最终失败: {command}")
+                return None
+
+            # 尝试重新建立连接
+            try:
+                # 某些情况下 close 能清理旧的 broken pipe
+                await rcon.close() 
+                await rcon.connect()
+                print("RCON 重连成功，重试命令...")
+                continue # 进入下一次循环重试 send_cmd
+            except Exception as connect_err:
+                print(f"重连失败: {connect_err}")
+                return None
         except Exception as e:
-            print(f"RCON 重连失败 (尝试 {attempt}/{max_attempts}): {e}")
-            if attempt < max_attempts:
-                await asyncio.sleep(1)
+            # 其他逻辑错误（如命令格式错误），不重试
+            print(f"未知错误: {e}")
+            return None
+    return None
+
+async def query_online_players(rcon: RconClient, event: GroupMessageEvent) -> None:
+    # 复用 execute_rcon_command，享受重连机制
+    response = await execute_rcon_command(rcon, "list")
     
-    print("RCON 重连失败，已达到最大尝试次数")
-    return False
+    if response is None:
+        await event.reply("无法连接到服务器或指令执行失败。")
+        return
+
+    if not response:
+        msg = "服务器未响应 list 指令。"
+    else:
+        msg = f"【当前在线】\n{response.strip()}"
+        
+    await event.reply(msg)
 
 async def send_to_mc(rcon: RconClient, nickname: str, content: str) -> None:
-    """
-    使用 tellraw 发送彩色 JSON 消息到 MC，失败时自动重连
-    """
     payload: list[dict[str, Any]] = [
         {"text": "[QQ] ", "color": "gold", "bold": True},
         {"text": f"{nickname}: ", "color": "aqua"},
         {"text": content, "color": "white"}
     ]
-    
     command = f'tellraw @a {json.dumps(payload)}'
     
-    try:
-        await rcon.send_cmd(command)
-        print(f"已转发: {nickname} -> {content}")
-    except Exception as e:
-        print(f"转发失败 (RCON Error): {e}")
-        print("尝试重连 RCON...")
-        if await reconnect_rcon(rcon):
-            # 重连成功后再试一次
-            try:
-                await rcon.send_cmd(command)
-                print(f"已转发: {nickname} -> {content}")
-            except Exception as e:
-                print(f"重连后仍然失败: {e}，放弃本次消息")
-        else:
-            print("重连失败，放弃本次消息")
+    # 复用执行器，不需要返回值
+    await execute_rcon_command(rcon, command)
+    # 可以在 execute_rcon_command 里加日志，或者这里假设成功
+    # print(f"已尝试转发: {nickname} -> {content}")
 
 async def main() -> None:
     config = load_config()
@@ -129,54 +121,56 @@ async def main() -> None:
     password = str(config.get("mc_server_password", ""))
     
     if target_group == 0:
-        print("错误: 请在 pyproject.toml 中配置 target_group_id")
+        print("错误: 请配置 target_group_id")
         return
 
     mc_client = RconClient(host, port, password)
-    print("RCON 客户端已创建，将在收到消息时自动连接")
+    
+    # 优化：启动时尝试连接一次
+    try:
+        await mc_client.connect()
+        print("RCON 初始化连接成功")
+    except Exception as e:
+        print(f"RCON 初始化连接失败: {e} (将在发送消息时自动重试)")
 
     napcat_url = str(config.get("napcat_url", "ws://localhost:3001"))
     napcat_token = str(config.get("napcat_token", ""))
     
-    # NapCat 连接重试逻辑
+    print(f"开始监听 NapCat: {napcat_url}，目标群: {target_group}")
+
     while True:
         try:
             async with NapCatClient(napcat_url, napcat_token) as client:
                 async for event in client.events():
                     match event:
-                        # 1. 筛选特定群组的消息
                         case GroupMessageEvent(group_id=gid, sender=sender, message=message) if int(gid) == target_group:
                             
-                            # 获取解析后的文本
-                            raw_content: str = parse_message_chain(message)
-                            clean_content: str = raw_content.strip()
+                            raw_content = parse_message_chain(message)
+                            clean_content = raw_content.strip()
 
-                            # 2. 对文本内容进行模式匹配
                             match clean_content:
-                                # 指令 A: 查询列表 (支持 .list, .cx, .在线)
                                 case ".list" | ".cx" | ".mc":
-                                    print(f"收到查询指令，来自: {sender.nickname}")
+                                    print(f"[指令] 查询在线: {sender.nickname}")
                                     await query_online_players(mc_client, event)
                                 
-                                # 指令 B: 简单的 Ping
                                 case ".ping":
                                     await event.reply("Pong! 机器人在线。")
 
-                                # 默认: 不是指令，则执行转发逻辑
                                 case _ if clean_content:
-                                    display_name = sender.card or sender.nickname or "未知用户"
-                                    await send_to_mc(mc_client, display_name, clean_content)
+                                    # 过滤掉以 . 开头的其他未知指令，防止误转发
+                                    if not clean_content.startswith("."):
+                                        display_name = sender.card or sender.nickname or "未知用户"
+                                        await send_to_mc(mc_client, display_name, clean_content)
                                 
-                                # 空消息 (如只发了图片但我们在 parse 只有 [图片])
                                 case _:
                                     pass
-
                         case _:
                             pass
         except Exception as e:
             print(f"NapCat 连接断开: {e}，5秒后重连...")
             await asyncio.sleep(5)
 
+    # 这里的 close 实际上很难被执行到，除非 break loop
     await mc_client.close()
 
 if __name__ == "__main__":
