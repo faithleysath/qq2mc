@@ -1,7 +1,6 @@
-FROM ghcr.io/astral-sh/uv:alpine
+FROM ghcr.io/astral-sh/uv:python3.14-alpine
 WORKDIR /app
 ENV UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
-ENV UV_PYTHON_INSTALL_MIRROR=http://mirrors.ustc.edu.cn/python-build-standalone/
 COPY pyproject.toml .
 COPY uv.lock .
 RUN uv sync --locked
