@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:python3.14-alpine
 WORKDIR /app
-ENV UV_INDEX_URL=https://mirrors.ustc.edu.cn/pypi/simple
+ENV UV_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple
 COPY pyproject.toml .
 RUN uv sync
 COPY . .
