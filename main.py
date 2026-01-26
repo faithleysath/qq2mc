@@ -54,6 +54,28 @@ def parse_message_chain(message_chain: tuple[MessageSegmentType, ...]) -> str:
 
     return "".join(text_buffer)
 
+async def query_online_players(rcon: RconClient, event: GroupMessageEvent) -> None:
+    """
+    发送 list 命令并回显给群聊
+    """
+    try:
+        # RCON 的 send_cmd 返回 str，这里显式标注
+        response, _ = await rcon.send_cmd("list")
+        
+        # 简单的格式美化
+        if not response:
+            msg = "服务器未响应 list 指令。"
+        else:
+            # 这里的 response 通常格式为: "There are 2 of a max of 20 players online: Alex, Steve"
+            # 我们可以加个中文标题
+            msg = f"【当前在线】\n{response.strip()}"
+            
+        # 使用 event.reply 回复，它在 SDK 中定义为 async
+        await event.reply(msg)
+        
+    except Exception as e:
+        await event.reply(f"查询失败: {e}")
+
 async def reconnect_rcon(rcon: RconClient, max_attempts: int = 3) -> bool:
     """
     RCON 重连逻辑，返回是否成功
@@ -120,17 +142,35 @@ async def main() -> None:
     while True:
         try:
             async with NapCatClient(napcat_url, napcat_token) as client:
-                print("NapCat 连接成功")
                 async for event in client.events():
                     match event:
+                        # 1. 筛选特定群组的消息
                         case GroupMessageEvent(group_id=gid, sender=sender, message=message) if int(gid) == target_group:
                             
-                            content = parse_message_chain(message)
-                            
-                            if content.strip():
-                                display_name = sender.card or sender.nickname or "未知用户"
-                                await send_to_mc(mc_client, display_name, content)
-                        
+                            # 获取解析后的文本
+                            raw_content: str = parse_message_chain(message)
+                            clean_content: str = raw_content.strip()
+
+                            # 2. 对文本内容进行模式匹配
+                            match clean_content:
+                                # 指令 A: 查询列表 (支持 .list, .cx, .在线)
+                                case ".list" | ".cx" | ".mc":
+                                    print(f"收到查询指令，来自: {sender.nickname}")
+                                    await query_online_players(mc_client, event)
+                                
+                                # 指令 B: 简单的 Ping
+                                case ".ping":
+                                    await event.reply("Pong! 机器人在线。")
+
+                                # 默认: 不是指令，则执行转发逻辑
+                                case _ if clean_content:
+                                    display_name = sender.card or sender.nickname or "未知用户"
+                                    await send_to_mc(mc_client, display_name, clean_content)
+                                
+                                # 空消息 (如只发了图片但我们在 parse 只有 [图片])
+                                case _:
+                                    pass
+
                         case _:
                             pass
         except Exception as e:
