@@ -93,7 +93,8 @@ async def main() -> None:
         return
 
     napcat_url = str(config.get("napcat_url", "ws://localhost:3001"))
-    async with NapCatClient(napcat_url) as client:
+    napcat_token = str(config.get("napcat_token", ""))
+    async with NapCatClient(napcat_url, napcat_token) as client:
         async for event in client.events():
             match event:
                 case GroupMessageEvent(group_id=gid, sender=sender, message=message) if int(gid) == target_group:

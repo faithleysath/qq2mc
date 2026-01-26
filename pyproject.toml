@@ -15,4 +15,5 @@ mc_server_host = "mc-server"
 mc_server_port = 25575
 mc_server_password = "QeGkUJUWsChKWRaDj6Fd"
 napcat_url = "ws://localhost:3001"
+napcat_token = "sd37f4fb3Hj87vevcv4C"
 target_group_id = 948251336
