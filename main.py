@@ -84,20 +84,22 @@ async def execute_rcon_command(rcon: RconClient, command: str, max_retries: int 
             return None
     return None
 
-async def query_online_players(rcon: RconClient, event: GroupMessageEvent) -> None:
+async def query_online_players(rcon: RconClient) -> list[str] | None:
     # 复用 execute_rcon_command，享受重连机制
     response = await execute_rcon_command(rcon, "list")
     
     if response is None:
-        await event.reply("无法连接到服务器或指令执行失败。")
-        return
+        return None
 
-    if not response:
-        msg = "服务器未响应 list 指令。"
-    else:
-        msg = f"【当前在线】\n{response.strip()}"
-        
-    await event.reply(msg)
+    part = response.split("online: ")
+
+    if len(part) != 2:
+        return None
+    
+    players_str = part[1].strip()
+    players = [p.strip() for p in players_str.split(",")] if players_str else []
+    return players
+
 
 async def send_to_mc(rcon: RconClient, nickname: str, content: str) -> None:
     payload: list[dict[str, Any]] = [
@@ -149,11 +151,17 @@ async def main() -> None:
 
                             match clean_content:
                                 case ".list" | ".cx" | ".mc":
-                                    print(f"[指令] 查询在线: {sender.nickname}")
-                                    await query_online_players(mc_client, event)
+                                    players = await query_online_players(mc_client)
+                                    if players is None:
+                                        await event.send_msg("无法获取在线玩家列表，请检查 RCON 连接。")
+                                    elif not players:
+                                        await event.send_msg("当前没有在线玩家。")
+                                    else:
+                                        player_list = ", ".join(players)
+                                        await event.send_msg(f"当前在线玩家 ({len(players)} / 40): {player_list}")
                                 
                                 case ".ping":
-                                    await event.reply("Pong! 机器人在线。")
+                                    await event.send_msg("Pong! 机器人在线。")
 
                                 case _ if clean_content:
                                     # 过滤掉以 . 开头的其他未知指令，防止误转发
