@@ -14,6 +14,7 @@ from napcat.types import (
     MessageImage, 
     MessageFace, 
     MessageReply,
+    MessageForward,
     MessageSegmentType
 )
 
@@ -41,7 +42,9 @@ def parse_message_chain(message_chain: tuple[MessageSegmentType, ...]) -> str:
             case MessageFace():
                 text_buffer.append("[表情]")
             case MessageReply():
-                pass # 忽略回复引用
+                text_buffer.append("[回复]")
+            case MessageForward():
+                text_buffer.append("[转发]")
             case _:
                 pass
 
@@ -111,8 +114,6 @@ async def send_to_mc(rcon: RconClient, nickname: str, content: str) -> None:
     
     # 复用执行器，不需要返回值
     await execute_rcon_command(rcon, command)
-    # 可以在 execute_rcon_command 里加日志，或者这里假设成功
-    # print(f"已尝试转发: {nickname} -> {content}")
 
 async def main() -> None:
     config = load_config()
@@ -149,8 +150,12 @@ async def main() -> None:
                             raw_content = parse_message_chain(message)
                             clean_content = raw_content.strip()
 
+                            if clean_content:
+                                display_name = sender.card or sender.nickname or "未知用户"
+                                await send_to_mc(mc_client, display_name, clean_content)
+
                             match clean_content:
-                                case ".list" | ".cx" | ".mc":
+                                case ".mc":
                                     players = await query_online_players(mc_client)
                                     if players is None:
                                         await event.send_msg("无法获取在线玩家列表，请检查 RCON 连接。")
@@ -158,17 +163,9 @@ async def main() -> None:
                                         await event.send_msg("当前没有在线玩家。")
                                     else:
                                         player_list = ", ".join(players)
-                                        await event.send_msg(f"当前在线玩家 ({len(players)} / 40): {player_list}")
-                                
+                                        await event.send_msg(f"当前在线玩家({len(players)} / 40): {player_list}")
                                 case ".ping":
                                     await event.send_msg("Pong! 机器人在线。")
-
-                                case _ if clean_content:
-                                    # 过滤掉以 . 开头的其他未知指令，防止误转发
-                                    if not clean_content.startswith("."):
-                                        display_name = sender.card or sender.nickname or "未知用户"
-                                        await send_to_mc(mc_client, display_name, clean_content)
-                                
                                 case _:
                                     pass
                         case _:
