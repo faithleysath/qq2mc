@@ -7,6 +7,7 @@ from typing import Any
 from aiomcrcon import Client as RconClient
 from aiomcrcon.errors import RCONConnectionError, ClientNotConnectedError
 from napcat import (
+    __version__,
     NapCatClient,
     GroupMessageEvent,
     Message,
@@ -168,6 +169,8 @@ async def main() -> None:
                                         await event.send_msg(f"当前在线玩家({len(players)} / 40): {player_list}")
                                 case ".ping":
                                     await event.send_msg("Pong! 机器人在线。")
+                                case ".version":
+                                    await event.send_msg(f"NapCat SDK 版本：{__version__}")
                                 case _:
                                     pass
                         case _:
