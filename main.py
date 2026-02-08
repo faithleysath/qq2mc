@@ -6,17 +6,19 @@ from typing import Any
 
 from aiomcrcon import Client as RconClient
 from aiomcrcon.errors import RCONConnectionError, ClientNotConnectedError
-from napcat import NapCatClient, GroupMessageEvent
-
-from napcat.types import (
-    MessageText, 
-    MessageAt, 
-    MessageImage, 
-    MessageFace, 
-    MessageReply,
-    MessageForward,
-    MessageSegmentType
+from napcat import (
+    NapCatClient,
+    GroupMessageEvent,
+    Message,
+    UnknownMessageSegment,
+    Text,
+    Image,
+    At,
+    Face,
+    Reply,
+    Forward
 )
+
 
 def load_config() -> dict[str, Any]:
     config_path = Path("pyproject.toml")
@@ -27,23 +29,23 @@ def load_config() -> dict[str, Any]:
         data = tomllib.load(f)
     return data.get("tool", {}).get("bot", {})
 
-def parse_message_chain(message_chain: tuple[MessageSegmentType, ...]) -> str:
+def parse__chain(_chain: tuple[Message | UnknownMessageSegment, ...] | str) -> str:
     text_buffer: list[str] = []
     
-    for seg in message_chain:
+    for seg in _chain:
         match seg:
-            case MessageText(data=d):
-                text_buffer.append(d.text)
-            case MessageImage():
+            case Text(text=t):
+                text_buffer.append(t)
+            case Image():
                 text_buffer.append("[图片]")
-            case MessageAt(data=d):
-                name = d.name if d.name is not None else d.qq
+            case At(qq=q, name=n):
+                name = n if n is not None else q
                 text_buffer.append(f"@{name} ")
-            case MessageFace():
+            case Face():
                 text_buffer.append("[表情]")
-            case MessageReply():
+            case Reply():
                 text_buffer.append("[回复]")
-            case MessageForward():
+            case Forward():
                 text_buffer.append("[转发]")
             case _:
                 pass
@@ -147,7 +149,7 @@ async def main() -> None:
                     match event:
                         case GroupMessageEvent(group_id=gid, sender=sender, message=message) if int(gid) == target_group:
                             
-                            raw_content = parse_message_chain(message)
+                            raw_content = parse__chain(message)
                             clean_content = raw_content.strip()
 
                             if clean_content:
