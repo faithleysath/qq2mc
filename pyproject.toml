@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14.2"
 dependencies = [
     "aio-mc-rcon>=3.4.2",
-    "napcat-sdk>=0.3.4",
+    "napcat-sdk>=0.3.8",
 ]
 
 
