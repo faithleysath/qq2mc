@@ -13,15 +13,15 @@ wheels = [
 
 [[package]]
 name = "napcat-sdk"
-version = "0.3.8"
+version = "0.4.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "orjson" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/46/94/4124591e69558a0cdb9748745da0bb0ed38b0939a4c57779cdb51acc14a1/napcat_sdk-0.3.8.tar.gz", hash = "sha256:52f65dc310f0ba85a6f21d1001d575de4814202d22361fbb7b197b50d345aa95", size = 44681, upload-time = "2026-02-08T01:55:21.81Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/40/bf3762404191100a9883e94b1786920d0f678ada1fd078baeb6a71fc969a/napcat_sdk-0.4.3.tar.gz", hash = "sha256:e8d1b844712e1cd4453ad9831133fbd38d575ae0fa749ad16b01bfd3725f7951", size = 46647, upload-time = "2026-02-09T13:18:30.158Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ed/6e/19dd69b0d40d6dd7d9b9115e12d241e106ff9b75cb6bfcdee57b936c7036/napcat_sdk-0.3.8-py3-none-any.whl", hash = "sha256:0e81f6c040b8fc8168a12e0bdfb0f2abe10f4a9a7a8579451accde5c6eac08ac", size = 60105, upload-time = "2026-02-08T01:55:23.173Z" },
+    { url = "https://files.pythonhosted.org/packages/22/24/3a5fcfefc0db6b05e804984a239dbd6065203dc043721ea74c15b1580b01/napcat_sdk-0.4.3-py3-none-any.whl", hash = "sha256:32f61ffa284a5105cf4e740ccc3fb28a2cf06a31f24972a9f8be00a3343090f5", size = 62409, upload-time = "2026-02-09T13:18:30.963Z" },
 ]
 
 [[package]]

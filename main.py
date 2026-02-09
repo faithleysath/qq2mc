@@ -145,36 +145,35 @@ async def main() -> None:
 
     while True:
         try:
-            async with NapCatClient(napcat_url, napcat_token) as client:
-                async for event in client.events():
-                    match event:
-                        case GroupMessageEvent(group_id=gid, sender=sender, message=message) if int(gid) == target_group:
-                            
-                            raw_content = parse__chain(message)
-                            clean_content = raw_content.strip()
+            async for event in NapCatClient(napcat_url, napcat_token):
+                match event:
+                    case GroupMessageEvent(group_id=gid, sender=sender, message=message) if int(gid) == target_group:
+                        
+                        raw_content = parse__chain(message)
+                        clean_content = raw_content.strip()
 
-                            if clean_content:
-                                display_name = sender.card or sender.nickname or "未知用户"
-                                await send_to_mc(mc_client, display_name, clean_content)
+                        if clean_content:
+                            display_name = sender.card or sender.nickname or "未知用户"
+                            await send_to_mc(mc_client, display_name, clean_content)
 
-                            match clean_content:
-                                case ".mc":
-                                    players = await query_online_players(mc_client)
-                                    if players is None:
-                                        await event.send_msg("无法获取在线玩家列表，请检查 RCON 连接。")
-                                    elif not players:
-                                        await event.send_msg("当前没有在线玩家。")
-                                    else:
-                                        player_list = ", ".join(players)
-                                        await event.send_msg(f"当前在线玩家({len(players)} / 40): {player_list}")
-                                case ".ping":
-                                    await event.send_msg("Pong! 机器人在线。")
-                                case ".version":
-                                    await event.send_msg(f"NapCat SDK 版本：{__version__}")
-                                case _:
-                                    pass
-                        case _:
-                            pass
+                        match clean_content:
+                            case ".mc":
+                                players = await query_online_players(mc_client)
+                                if players is None:
+                                    await event.send_msg("无法获取在线玩家列表，请检查 RCON 连接。")
+                                elif not players:
+                                    await event.send_msg("当前没有在线玩家。")
+                                else:
+                                    player_list = ", ".join(players)
+                                    await event.send_msg(f"当前在线玩家({len(players)} / 40): {player_list}")
+                            case ".ping":
+                                await event.send_msg("Pong! 机器人在线。")
+                            case ".version":
+                                await event.send_msg(f"NapCat SDK 版本：{__version__}")
+                            case _:
+                                pass
+                    case _:
+                        pass
         except Exception as e:
             print(f"NapCat 连接断开: {e}，5秒后重连...")
             await asyncio.sleep(5)
